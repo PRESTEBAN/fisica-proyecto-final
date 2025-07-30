@@ -61,26 +61,9 @@ app.post('/send-notification', async (req, res) => {
         title: 'Sistema de Acceso',
         body: message,
       },
-      data: {
-        tipo: 'estado_puerta', // Opcional: útil si quieres diferenciar notificaciones en la app
-      },
       android: {
-        priority: 'high',
         notification: {
-          channelId: 'default', // Asegúrate que este canal exista o se cree en Android
           sound: 'default',
-        },
-      },
-      apns: {
-        payload: {
-          aps: {
-            alert: {
-              title: 'Sistema de Acceso',
-              body: message,
-            },
-            sound: 'default',
-            contentAvailable: true,
-          },
         },
       },
       token: token,
