@@ -8,6 +8,7 @@ const app = express();
 app.use(bodyParser.json());
 app.use(cors());
 
+// Inicializa Firebase Admin con credenciales de servicio
 admin.initializeApp({
   credential: admin.credential.cert({
     type: process.env.FIREBASE_TYPE,
@@ -24,24 +25,26 @@ admin.initializeApp({
   }),
 });
 
+// Ruta base
 app.get('/', (req, res) => {
-  res.send('Servidor funcionando correctamente');
+  res.send('🚀 Servidor funcionando correctamente');
 });
 
+// Ruta para enviar notificación
 app.post('/send-notification', async (req, res) => {
-  const { message, email } = req.body; // ✅ Extraer ambos parámetros
+  const { message, email } = req.body;
 
   if (!message) {
-    return res.status(400).json({ 
+    return res.status(400).json({
       error: 'El mensaje es requerido',
-      received: req.body 
+      received: req.body
     });
   }
 
   try {
     console.log('📤 Enviando notificación:', { message, email });
-    
-    // Buscar token guardado con ID 'admin' en Firestore
+
+    // Obtener token desde Firestore (ID fijo: admin)
     const tokenDoc = await admin.firestore().collection('tokens').doc('admin').get();
 
     if (!tokenDoc.exists) {
@@ -52,15 +55,32 @@ app.post('/send-notification', async (req, res) => {
     const token = tokenDoc.data().token;
     console.log('✅ Token encontrado:', token.substring(0, 20) + '...');
 
+    // Payload completo que permite mostrar la notificación aunque la app esté cerrada
     const messagePayload = {
       notification: {
         title: 'Sistema de Acceso',
         body: message,
       },
+      data: {
+        tipo: 'estado_puerta', // Opcional: útil si quieres diferenciar notificaciones en la app
+      },
       android: {
+        priority: 'high',
         notification: {
-          priority: 'high',
-          vibrateTimingsMillis: [0, 500, 1000, 500],
+          channelId: 'default', // Asegúrate que este canal exista o se cree en Android
+          sound: 'default',
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            alert: {
+              title: 'Sistema de Acceso',
+              body: message,
+            },
+            sound: 'default',
+            contentAvailable: true,
+          },
         },
       },
       token: token,
@@ -68,27 +88,28 @@ app.post('/send-notification', async (req, res) => {
 
     const result = await admin.messaging().send(messagePayload);
     console.log('✅ Notificación enviada exitosamente:', result);
-    
-    res.status(200).json({ 
-      success: true, 
+
+    res.status(200).json({
+      success: true,
       message: 'Notificación enviada con éxito',
-      messageId: result 
+      messageId: result
     });
-    
+
   } catch (error) {
     console.error('❌ Error enviando notificación:', {
       message: error.message,
       code: error.code,
       details: error.details
     });
-    
-    res.status(500).json({ 
-      error: 'Error enviando notificación', 
-      details: error.message 
+
+    res.status(500).json({
+      error: 'Error enviando notificación',
+      details: error.message
     });
   }
 });
 
+// Iniciar servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Servidor escuchando en puerto ${PORT}`);
