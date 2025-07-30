@@ -23,7 +23,7 @@ admin.initializeApp({
     client_x509_cert_url: process.env.FIREBASE_CLIENT_X509_CERT_URL,
     universe_domain: process.env.FIREBASE_UNIVERSE_DOMAIN,
   }),
-  databaseURL: process.env.FIREBASE_DATABASE_URL, // Asegúrate de poner esto en tu .env
+  databaseURL: process.env.FIREBASE_DATABASE_URL, // Asegúrate de tenerlo en el .env
 });
 
 // Ruta de prueba
@@ -94,38 +94,49 @@ stateRef.on('value', async (snapshot) => {
   const newState = snapshot.val();
   console.log('📡 Cambio detectado en estado:', newState);
 
+  // Mensajes según el estado
+  let title = '';
+  let body = '';
+
   if (newState === 'Abierto') {
-    console.log('🚪 La puerta está ABIERTA. Enviando notificación...');
+    title = '⚠️ Alerta de Puerta';
+    body = 'La puerta ha sido ABIERTA';
+  } else if (newState === 'Cerrado') {
+    title = '✅ Estado de Puerta';
+    body = 'La puerta ha sido CERRADA';
+  } else {
+    console.log('ℹ️ Estado no relevante para notificación:', newState);
+    return;
+  }
 
-    try {
-      const tokenDoc = await admin.firestore().collection('tokens').doc('admin').get();
+  try {
+    const tokenDoc = await admin.firestore().collection('tokens').doc('admin').get();
 
-      if (!tokenDoc.exists) {
-        console.error('❌ Token no encontrado en Firestore');
-        return;
-      }
-
-      const token = tokenDoc.data().token;
-
-      const messagePayload = {
-        notification: {
-          title: '⚠️ Alerta de Puerta',
-          body: 'La puerta ha sido ABIERTA',
-        },
-        android: {
-          notification: {
-            sound: 'default',
-          },
-        },
-        token: token,
-      };
-
-      const result = await admin.messaging().send(messagePayload);
-      console.log('✅ Notificación automática enviada:', result);
-
-    } catch (err) {
-      console.error('❌ Error al enviar notificación automática:', err.message);
+    if (!tokenDoc.exists) {
+      console.error('❌ Token no encontrado en Firestore');
+      return;
     }
+
+    const token = tokenDoc.data().token;
+
+    const messagePayload = {
+      notification: {
+        title: title,
+        body: body,
+      },
+      android: {
+        notification: {
+          sound: 'default',
+        },
+      },
+      token: token,
+    };
+
+    const result = await admin.messaging().send(messagePayload);
+    console.log(`✅ Notificación automática enviada por estado "${newState}":`, result);
+
+  } catch (err) {
+    console.error(`❌ Error al enviar notificación por estado "${newState}":`, err.message);
   }
 });
 
