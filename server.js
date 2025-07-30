@@ -23,14 +23,15 @@ admin.initializeApp({
     client_x509_cert_url: process.env.FIREBASE_CLIENT_X509_CERT_URL,
     universe_domain: process.env.FIREBASE_UNIVERSE_DOMAIN,
   }),
+  databaseURL: process.env.FIREBASE_DATABASE_URL, // Asegúrate de poner esto en tu .env
 });
 
-// Ruta base
+// Ruta de prueba
 app.get('/', (req, res) => {
   res.send('🚀 Servidor funcionando correctamente');
 });
 
-// Ruta para enviar notificación
+// Ruta para enviar notificación manual
 app.post('/send-notification', async (req, res) => {
   const { message, email } = req.body;
 
@@ -42,20 +43,17 @@ app.post('/send-notification', async (req, res) => {
   }
 
   try {
-    console.log('📤 Enviando notificación:', { message, email });
+    console.log('📤 Enviando notificación manual:', { message, email });
 
-    // Obtener token desde Firestore (ID fijo: admin)
     const tokenDoc = await admin.firestore().collection('tokens').doc('admin').get();
 
     if (!tokenDoc.exists) {
-      console.error('❌ Token no encontrado en Firestore');
+      console.error('❌ Token no encontrado');
       return res.status(404).json({ error: 'Token no encontrado' });
     }
 
     const token = tokenDoc.data().token;
-    console.log('✅ Token encontrado:', token.substring(0, 20) + '...');
 
-    // Payload completo que permite mostrar la notificación aunque la app esté cerrada
     const messagePayload = {
       notification: {
         title: 'Sistema de Acceso',
@@ -70,7 +68,7 @@ app.post('/send-notification', async (req, res) => {
     };
 
     const result = await admin.messaging().send(messagePayload);
-    console.log('✅ Notificación enviada exitosamente:', result);
+    console.log('✅ Notificación enviada:', result);
 
     res.status(200).json({
       success: true,
@@ -79,11 +77,7 @@ app.post('/send-notification', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error enviando notificación:', {
-      message: error.message,
-      code: error.code,
-      details: error.details
-    });
+    console.error('❌ Error al enviar notificación:', error.message);
 
     res.status(500).json({
       error: 'Error enviando notificación',
@@ -92,7 +86,50 @@ app.post('/send-notification', async (req, res) => {
   }
 });
 
-// Iniciar servidor
+// 🔁 Escucha cambios en Realtime Database
+const db = admin.database();
+const stateRef = db.ref('door-system/status/state');
+
+stateRef.on('value', async (snapshot) => {
+  const newState = snapshot.val();
+  console.log('📡 Cambio detectado en estado:', newState);
+
+  if (newState === 'Abierto') {
+    console.log('🚪 La puerta está ABIERTA. Enviando notificación...');
+
+    try {
+      const tokenDoc = await admin.firestore().collection('tokens').doc('admin').get();
+
+      if (!tokenDoc.exists) {
+        console.error('❌ Token no encontrado en Firestore');
+        return;
+      }
+
+      const token = tokenDoc.data().token;
+
+      const messagePayload = {
+        notification: {
+          title: '⚠️ Alerta de Puerta',
+          body: 'La puerta ha sido ABIERTA',
+        },
+        android: {
+          notification: {
+            sound: 'default',
+          },
+        },
+        token: token,
+      };
+
+      const result = await admin.messaging().send(messagePayload);
+      console.log('✅ Notificación automática enviada:', result);
+
+    } catch (err) {
+      console.error('❌ Error al enviar notificación automática:', err.message);
+    }
+  }
+});
+
+// Inicia el servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Servidor escuchando en puerto ${PORT}`);
